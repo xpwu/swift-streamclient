@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 5.7
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -12,13 +12,13 @@ let package = Package(
             name: "xpwu_stream",
             targets: ["xpwu_stream"]),
     ],
-		dependencies: [.package(path: "../swift-x")],
+		dependencies: [.package(name:"xpwu_x", path: "../swift-x")],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "xpwu_stream",
-						dependencies: [.product(name: "xpwu_x", package: "swift-x")]),
+						dependencies: [.product(name: "xpwu_x", package: "xpwu_x")]),
         .testTarget(
             name: "xpwu_streamTests",
             dependencies: ["xpwu_stream"]),
