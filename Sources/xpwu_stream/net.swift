@@ -60,3 +60,33 @@ extension SyncAllRequest {
 		}
 	}
 }
+
+/**
+ *
+ *    NotConnect  --->  Connecting  ---> Connected ---> Invalidated
+ *                          |                                ^
+ *                          |                                |
+ *                          |________________________________|
+ *
+ */
+
+fileprivate enum State {
+	case NotConnect, Connected, Invalidated(StmError)
+}
+
+extension State: CustomStringConvertible {
+	var description: String {
+		switch self {
+		case .NotConnect:
+			return "NotConnect"
+		case .Connected:
+			return "Connected"
+		case .Invalidated:
+			return "Invalidated"
+		}
+	}
+}
+
+class Net {
+	
+}
