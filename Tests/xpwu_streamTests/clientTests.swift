@@ -9,4 +9,8 @@ final class streamclientTests: XCTestCase {
         // Defining Test Cases and Test Methods
         // https://developer.apple.com/documentation/xctest/defining_test_cases_and_test_methods
     }
+	
+	func testError() {
+		print(StmError.ConnTimeoutErr("timeout > 5s"))
+	}
 }
