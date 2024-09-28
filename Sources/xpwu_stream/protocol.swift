@@ -52,7 +52,7 @@ public protocol `Protocol` {
 	
 	func Connect() async -> (Handshake, StmError?)
 	func Close() async
-	func Send(content: [Byte]) -> StmError?
+	func Send(content: [Byte]) async -> StmError?
 	
 	var logger: Logger {get set}
 	
@@ -84,7 +84,7 @@ extension Handshake {
 	
 	public static let StreamLen = 2 + 1 + 1 + 4 + 8
 	
-	public static func Parse(handshake: [Byte]) -> Handshake {
+	public static func Parse(_ handshake: [Byte]) -> Handshake {
 		assert(handshake.count >= StreamLen)
 		
 		var ret = Handshake()
