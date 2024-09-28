@@ -24,6 +24,5 @@ let package = Package(
         .testTarget(
             name: "xpwu_streamTests",
             dependencies: ["xpwu_stream"]),
-    ],
-		swiftLanguageVersions: [.version("5.5")]
+    ]
 )

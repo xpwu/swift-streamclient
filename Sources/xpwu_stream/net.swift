@@ -9,11 +9,12 @@ import Foundation
 import xpwu_concurrency
 import xpwu_x
 
-private typealias RequestChannel = Channel<(FakeHttp.Response, StmError?)>
 
 fileprivate class SyncAllRequest {
+	fileprivate typealias RequestChannel = Channel<(FakeHttp.Response, StmError?)>
+	
 	let mutex: Mutex = Mutex()
-	var allRequests: [UInt32:RequestChannel] = [:]
+	private var allRequests: [UInt32:RequestChannel] = [:]
 	var semaphore: xpwu_concurrency.Semaphore = Semaphore(permits: 3)
 	
 	public var permits: Int {
@@ -26,8 +27,11 @@ fileprivate class SyncAllRequest {
 	}
 }
 
+// channel 必须在 SyncAllRequest 的控制下，所以 Add 获取的只能 receive
+// 要 send 就必须通过 remove 获取
 extension SyncAllRequest {
-	func Add(reqId: UInt32) async -> RequestChannel {
+	
+	func Add(reqId: UInt32) async -> some ReceiveChannel<(FakeHttp.Response, StmError?)> {
 		await semaphore.Acquire()
 		return await mutex.WithLock {
 			let ch = RequestChannel(buffer: 1)
@@ -37,7 +41,7 @@ extension SyncAllRequest {
 	}
 	
 	// 可以用同一个 reqid 重复调用
-	func Remove(reqId: UInt32) async -> RequestChannel? {
+	func Remove(reqId: UInt32) async -> (some SendChannel<(FakeHttp.Response, StmError?)>)? {
 		return await mutex.WithLock {
 			let ret = allRequests.removeValue(forKey: reqId)
 			// todo: check semaphore
@@ -252,8 +256,7 @@ extension Net {
 			Task {
 				let err = await self.proto.Send(content:request.encodedData)
 				if let err {
-					// todo  ch?
-					await ch.Send((FakeHttp.Response(), err))
+					await self.allRequests.Remove(reqId: reqId)?.Send((FakeHttp.Response(), err))
 				}
 			}
 			return await ch.Receive()

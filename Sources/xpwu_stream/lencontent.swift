@@ -249,18 +249,22 @@ extension LenContent: `Protocol` {
 		UInt32(content.count + 4).toNet(&len)
 		
 		await stopOutputHeartbeat()
-		await mutex.WithLock {
+		
+		let ret = await mutex.WithLock {()->StmError? in
 			do {
 				try await task?.write(len.toData(), timeout: TimeInterval(self.handshake.FrameTimeout.second()))
 				try await task?.write(content.toData(), timeout: TimeInterval(self.handshake.FrameTimeout.second()))
+				
+				return nil
 			} catch {
 				await onError(.ElseConnErr("\(error)"))
+				return .ElseConnErr("\(error)")
 			}
 		}
 		
 		setOutputHeartbeat()
-		// todo return connect error?
-		return nil
+		
+		return ret
 	}
 }
 
