@@ -6,12 +6,11 @@ import xpwu_x
 import xpwu_concurrency
 
 public class Client {
-	let logger: Logger
-	var protocolCreator: ()->`Protocol`
-	
 	public var onPush: ([Byte])async->Void = {_ in }
 	public var onPeerClosed: (StmError)async->Void = {_ in }
 	
+	let logger: Logger
+	var protocolCreator: ()->`Protocol`
 	let flag = UniqFlag()
 	private let mutex: Mutex = Mutex()
 	private var net_: Net?
@@ -73,16 +72,6 @@ public extension Client {
 		return await net.send(data: data, headers: headers, timeout: timeout)
 	}
 	
-	private static let reqidKey: String = "X-Req-Id"
-	
-	func SendWithReqId(_ data: [Byte], withheaders headers:[String:String]
-										 , timeout: Duration = 30*Duration.Second)async -> ([Byte], StmError?) {
-		
-		var newHeaders = headers
-		newHeaders[Client.reqidKey] = UUID().uuidString
-		
-		return await self.Send(data, withheaders: newHeaders, timeout: timeout)
-	}
 }
 
 public extension Client {
@@ -108,17 +97,4 @@ public extension Client {
 	}
 }
 
-// LenContent
-public extension Client {
-	static func WithLenContent(_ options: LenContent.Option..., logger: Logger = PrintLogger())->Client {
-		return Client(logger) {
-			return LenContent(options)
-		}
-	}
-	
-	func UpdateOptions(_ options: LenContent.Option...) {
-		self.UpdateProtocol {
-			return LenContent(options)
-		}
-	}
-}
+
