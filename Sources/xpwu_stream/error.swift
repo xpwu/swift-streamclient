@@ -36,5 +36,14 @@ extension StmError {
 			return msg
 		}
 	}
+	
+	public var toConnError: StmError {
+		get {
+			if self.isConnErr {
+				return self
+			}
+			return .ElseConnErr(self.msg)
+		}
+	}
 }
 

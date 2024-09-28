@@ -44,9 +44,9 @@ content protocol:
 struct FakeHttp{
   struct Request {
 		fileprivate var data:[Byte] = []
-		var encodedData: [Byte] {data}
+		var encodedData: [Byte] { get {data} }
 		
-    mutating func setReqId(reqId:UInt32) {
+		mutating func setReqId(reqId:UInt32) {
       data[0] = Byte((reqId & 0xff000000) >> 24)
       data[1] = Byte((reqId & 0xff0000) >> 16)
       data[2] = Byte((reqId & 0xff00) >> 8)
@@ -74,11 +74,12 @@ struct FakeHttp{
 	static let Failed = Response.Status.Failed
 }
 
-extension FakeHttp {
-	static func NewRequest(body:[Byte], headers:[String:String]) -> (Request, StmError?) {
-		var req = Request()
+extension FakeHttp.Request {
+	static func New(reqId: UInt32, body:[Byte], headers:[String:String]) -> (FakeHttp.Request, StmError?) {
+		var req = FakeHttp.Request()
 		// reqid
 		req.data = [Byte](repeating: 0, count: 4)
+		req.setReqId(reqId: reqId)
 		
 		for (key, value) in headers {
 			let k = key.utf8
@@ -102,7 +103,7 @@ extension FakeHttp {
 }
 
 extension FakeHttp.Response {
-	func newPushACK() -> ([Byte], StmError?) {
+	func newPushAck() -> ([Byte], StmError?) {
 		if (!isPush || pushID.count != 4) {
 			return ([], .ElseErr("invalid push data"))
 		}
