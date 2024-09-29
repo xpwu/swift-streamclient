@@ -13,7 +13,7 @@ let package = Package(
             targets: ["xpwu_stream"]),
     ],
 		dependencies: [.package(name:"xpwu_x", path: "../swift-x"),
-									 .package(name:"xpwu_concurrency", path: "../swift-concurrency")],
+									 .package(name:"xpwu_concurrency", path: "../swift-concurrency"),],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
