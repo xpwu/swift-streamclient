@@ -142,7 +142,7 @@ actor ReqId {
 class Net {
 	private let logger: Logger
 	private let onPeerClosed: (StmError) async -> Void
-	private let onPush: ([Byte]) async -> Void
+	private let onPush: (Data) async -> Void
 	
 	var isInValid: Bool {
 		get { state.isInvalidated }
@@ -164,7 +164,7 @@ class Net {
 	}
 
 	init(_ l: Logger, protocolCreator:()->`Protocol`
-			 , onPeerClosed: @escaping(StmError)async->Void, onPush: @escaping([Byte])async->Void) {
+			 , onPeerClosed: @escaping(StmError)async->Void, onPush: @escaping(Data)async->Void) {
 		self.logger = l
 		self.onPush = onPush
 		self.onPeerClosed = onPeerClosed
@@ -231,8 +231,8 @@ extension Net {
 	}
 	
 	// 如果没有连接成功，直接返回失败
-	func send(data: [Byte], headers:[String:String]
-						, timeout:Duration = 30*Duration.Second) async -> ([Byte], StmError?) {
+	func send(data: Data, headers:[String:String]
+						, timeout:Duration = 30*Duration.Second) async -> (Data, StmError?) {
 		// 预判断
 		let ret = await connLocker.WithLock { ()->StmError? in
 			logger.Debug("Net[\(flag)]<\(connectID)>.send:state", "\(state) --- \(headers)")
@@ -245,7 +245,7 @@ extension Net {
 			return nil
 		}
 		if let ret {
-			return ([], ret)
+			return (Data(), ret)
 		}
 		
 		let reqId = await self.reqId.get()
@@ -253,12 +253,12 @@ extension Net {
 		if let err {
 			logger.Debug("Net[\(flag)]<\(connectID)>.send:FakeHttpRequest"
 									 , "\(headers) (reqId:\(reqId)) --- error: \(err)")
-			return ([], err)
+			return (Data(), err)
 		}
 		if request.encodedData.count > self.handshake.MaxBytes {
 			logger.Debug("Net[\(flag)]<\(connectID)>.send:MaxBytes"
 									 , "\(headers) (reqId:\(reqId)) --- error: Too Large")
-			return ([], .ElseErr("request.size(\(request.encodedData.count)) > MaxBytes(\(handshake.MaxBytes))"))
+			return (Data(), .ElseErr("request.size(\(request.encodedData.count)) > MaxBytes(\(handshake.MaxBytes))"))
 		}
 		
 		// 在客户端超时也认为是一个请求结束，但是真正的请求并没有结束，所以在服务器看来，仍然占用服务器的一个并发数
@@ -286,18 +286,18 @@ extension Net {
 		guard let ret2 else {
 			logger.Debug("Net[\(flag)]<\(connectID)>.send[\(reqId)]:Timeout"
 									 , "\(headers) (reqId:\(reqId)) --- timeout(>\(timeout.second())s)")
-			return ([], .ElseTimeoutErr("request timeout(\(timeout.second())s)"))
+			return (Data(), .ElseTimeoutErr("request timeout(\(timeout.second())s)"))
 		}
 		
 		if let err = ret2.1 {
-			return ([], err)
+			return (Data(), err)
 		}
 		
 		logger.Debug("Net[\(flag)]<\(connectID)>.send[\(reqId)]:response"
 								 , "\(headers) (reqId:\(reqId)) --- \(ret2.0.status)")
 		
 		if ret2.0.status != .OK {
-			return ([],.ElseErr(String(decoding: ret2.0.data, as: UTF8.self)))
+			return (Data(),.ElseErr(String(decoding: ret2.0.data, as: UTF8.self)))
 		}
 		
 		_ = await allRequests.Remove(reqId: reqId)
@@ -316,7 +316,7 @@ extension Net {
 
 // delegate
 extension Net {
-	func onMessage(_ msg: [Byte]) async {
+	func onMessage(_ msg: Data) async {
 		let (response, err) = msg.Parse()
 		if let err {
 			logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:parse", "error --- \(err)")

@@ -27,8 +27,8 @@ public extension Client {
 	
 	private static let reqidKey: String = "X-Req-Id"
 	
-	func SendWithReqId(_ data: [Byte], withheaders headers:[String:String]
-										 , timeout: Duration = 30*Duration.Second)async -> ([Byte], StmError?) {
+	func SendWithReqId(_ data: Data, withheaders headers:[String:String]
+										 , timeout: Duration = 30*Duration.Second)async -> (Data, StmError?) {
 		
 		var newHeaders = headers
 		newHeaders[Client.reqidKey] = UUID().uuidString

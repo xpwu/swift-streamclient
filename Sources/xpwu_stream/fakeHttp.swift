@@ -43,8 +43,8 @@ content protocol:
 
 struct FakeHttp{
   struct Request {
-		fileprivate var data:[Byte] = []
-		var encodedData: [Byte] { get {data} }
+		fileprivate var data:Data = Data()
+		var encodedData: Data { get {data} }
 		
 		mutating func setReqId(reqId:UInt32) {
       data[0] = Byte((reqId & 0xff000000) >> 24)
@@ -62,8 +62,8 @@ struct FakeHttp{
 		
 		var status: Status = .Failed
 		var reqId: UInt32 = 0
-		var data: [Byte] = []
-		var pushID: [Byte] = []
+		var data: Data = Data()
+		var pushID: Data = Data()
 		
 		var isPush: Bool {
 			reqId == 1
@@ -75,10 +75,10 @@ struct FakeHttp{
 }
 
 extension FakeHttp.Request {
-	static func New(reqId: UInt32, body:[Byte], headers:[String:String]) -> (FakeHttp.Request, StmError?) {
+	static func New(reqId: UInt32, body:Data, headers:[String:String]) -> (FakeHttp.Request, StmError?) {
 		var req = FakeHttp.Request()
 		// reqid
-		req.data = [Byte](repeating: 0, count: 4)
+		req.data = Data(repeating: 0, count: 4)
 		req.setReqId(reqId: reqId)
 		
 		for (key, value) in headers {
@@ -103,12 +103,12 @@ extension FakeHttp.Request {
 }
 
 extension FakeHttp.Response {
-	func newPushAck() -> ([Byte], StmError?) {
+	func newPushAck() -> (Data, StmError?) {
 		if (!isPush || pushID.count != 4) {
-			return ([], .ElseErr("invalid push data"))
+			return (Data(), .ElseErr("invalid push data"))
 		}
 		
-		var ret = [Byte](repeating: 0, count: 4)
+		var ret = Data(repeating: 0, count: 4)
 		ret[0] = Byte((reqId & 0xff000000) >> 24)
 		ret[1] = Byte((reqId & 0xff0000) >> 16)
 		ret[2] = Byte((reqId & 0xff00) >> 8)
@@ -124,6 +124,12 @@ extension FakeHttp.Response {
 }
 
 extension Array where Element == Byte {
+	func Parse() -> (FakeHttp.Response, StmError?) {
+		return Data(self).Parse()
+	}
+}
+
+extension Data {
 	func Parse() -> (FakeHttp.Response, StmError?) {
 		var res = FakeHttp.Response()
 		
@@ -145,14 +151,14 @@ extension Array where Element == Byte {
 				return (res, StmError.ElseErr("fakehttp protocol err(response.size of push < 9)."))
 			}
 			
-			res.pushID = [Byte](self[offset..<offset+4])
+			res.pushID = Data(self[offset..<offset+4])
 			offset += 4
 		}
 		
 		if (self.count <= offset) {
-			res.data = []
+			res.data = Data()
 		} else {
-			res.data = [Byte](self[offset...])
+			res.data = Data(self[offset...])
 		}
 		
 		return (res, nil)
