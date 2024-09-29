@@ -61,7 +61,7 @@ public class LenContent {
 	private let heartbeatStop: Channel<Bool> = Channel(buffer: .Unlimited)
 	
 	public var logger_: Logger = PrintLogger()
-	public var onMessage: ([Byte])async -> Void = { _ in}
+	public var onMessage: (Data)async -> Void = { _ in}
 	public var onError: (StmError)async -> Void = { _ in}
 	
 	private let flag = UniqFlag()
@@ -95,17 +95,17 @@ public extension LenContent {
 			self.runner = runner
 		}
 		
-		public static func Host(host: String)-> Option {
+		public static func Host(_ host: String)-> Option {
 			return Option { value in
 				value.host = host
 			}
 		}
-		public static func Port(port: Int)-> Option {
+		public static func Port(_ port: Int)-> Option {
 			return Option { value in
 				value.port = port
 			}
 		}
-		public static func ConnectTimeout(t: Duration)-> Option {
+		public static func ConnectTimeout(_ t: Duration)-> Option {
 			return Option { value in
 				value.connectionTimeout = t
 			}
@@ -176,7 +176,7 @@ extension LenContent {
 						throw StmError.ElseConnErr("received Too Large data(len=\(len)), must be less than \(self.handshake.MaxBytes)")
 					}
 					
-					var res: [Byte] = []
+					var res: Data = Data()
 					while res.count < len {
 						(data, eof) = try await task!.readData(ofMinLength: 1, maxLength: Int(len)
 																		 , timeout:self.handshake.FrameTimeout.timeInterval())
@@ -256,7 +256,7 @@ extension LenContent: `Protocol` {
 				throw StmError.ElseConnErr("no handshake response")
 			}
 			
-			self.handshake = Handshake.Parse(h.toBytes())
+			self.handshake = Handshake.Parse(h)
 			logger.Debug("LenContent[\(flag)]<\(connectID)>.readHandshake:handshake", "\(self.handshake)")
 			
 			self.setOutputHeartbeat()
@@ -280,13 +280,13 @@ extension LenContent: `Protocol` {
 		logger.Debug("LenContent[\(flag)]<\(connectID)>.Close", "closed by self")
 	}
 	
-	public func Send(content: [Byte]) async -> StmError? {
+	public func Send(content: Data) async -> StmError? {
 		// sizeof(length) = 4
 		if content.count + 4 > self.handshake.MaxBytes {
 			return StmError.ElseErr("request.size(\(content.count)) > MaxBytes(\(self.handshake.MaxBytes-4))")
 		}
 		
-		var len:[Byte] = [0, 0, 0, 0]
+		var len:Data = Data(repeating: 0, count: 4)
 		UInt32(content.count + 4).toNet(&len)
 		
 		await stopOutputHeartbeat()
@@ -295,8 +295,8 @@ extension LenContent: `Protocol` {
 			do {
 				logger.Debug("LenContent[\(flag)]<\(connectID)>.Send:start", "frameBytes = \(content.count + 4)")
 				
-				try await task?.write(len.toData(), timeout: TimeInterval(self.handshake.FrameTimeout.second()))
-				try await task?.write(content.toData(), timeout: TimeInterval(self.handshake.FrameTimeout.second()))
+				try await task?.write(len, timeout: TimeInterval(self.handshake.FrameTimeout.second()))
+				try await task?.write(content, timeout: TimeInterval(self.handshake.FrameTimeout.second()))
 				
 				logger.Debug("LenContent[\(flag)]<\(connectID)>.Send:end", "end")
 				return nil

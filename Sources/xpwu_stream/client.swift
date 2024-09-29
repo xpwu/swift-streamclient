@@ -6,7 +6,7 @@ import xpwu_x
 import xpwu_concurrency
 
 public class Client {
-	public var onPush: ([Byte])async->Void = {_ in }
+	public var onPush: (Data)async->Void = {_ in }
 	public var onPeerClosed: (StmError)async->Void = {_ in }
 	
 	let logger: Logger
@@ -48,8 +48,8 @@ private extension Client {
 
 public extension Client {
 
-	func Send(_ data: [Byte], withheaders headers:[String:String]
-						, timeout: Duration = 30*Duration.Second)async -> ([Byte], StmError?) {
+	func Send(_ data: Data, withheaders headers:[String:String]
+						, timeout: Duration = 30*Duration.Second)async -> (Data, StmError?) {
 		let sflag = UniqFlag()
 		logger.Info("Client[\(flag)].Send[\(sflag)]:start", "\(headers), request size = \(data.count)")
 		
@@ -57,7 +57,7 @@ public extension Client {
 		let err = await net.connect()
 		if let err {
 			logger.Error("Client[\(flag)].Send[\(sflag)]:error", "connect error: \(err)")
-			return ([], err)
+			return (Data(), err)
 		}
 		
 		let ret = await net.send(data: data, headers: headers, timeout: timeout)
@@ -77,7 +77,7 @@ public extension Client {
 		let err2 = await net2.connect()
 		if let err2 {
 			logger.Error("Client[\(flag)].Send[\(sflag)]:error", "connect error: \(err2)")
-			return ([], err)
+			return (Data(), err)
 		}
 		
 		let ret2 = await net.send(data: data, headers: headers, timeout: timeout)

@@ -16,4 +16,10 @@ final class exampleTests: XCTestCase {
 		async let a = {()async->String in "test auto called closure2"}()
 		print(await a)
 	}
+	
+	func testFile() async {
+		let fm = FileManager.default
+		print(fm.currentDirectoryPath)
+		print("#filePath=\(#filePath), #file=\(#file), #fileID=\(#fileID)")
+	}
 }
