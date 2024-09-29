@@ -58,6 +58,7 @@ extension SyncAllRequest {
 		await mutex.WithLock {
 			for (_, ch) in allRequests {
 				await ch.Send(ret)
+				await ch.Close()
 			}
 			allRequests.removeAll()
 			await semaphore.ReleaseAll()
@@ -274,8 +275,13 @@ extension Net {
 					await self.allRequests.Remove(reqId: reqId)?.Send((FakeHttp.Response(), err))
 				}
 			}
-			return await ch.Receive()
+			
+			if let r = await ch.Receive() {
+				return r
+			}
+			return (FakeHttp.Response(), StmError.ElseErr("channel is closed, exception!!!"))
 		}
+		
 		// timeout: ret2 == nil
 		guard let ret2 else {
 			logger.Debug("Net[\(flag)]<\(connectID)>.send[\(reqId)]:Timeout"
