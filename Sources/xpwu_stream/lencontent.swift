@@ -225,7 +225,7 @@ extension LenContent: `Protocol` {
 		let (task, err) = await withCheckedContinuation {
 			(continuation: CheckedContinuation<(URLSessionStreamTask, StmError?), Never>) in
 			
-			var c = URLSessionConfiguration.default
+			let c = URLSessionConfiguration.default
 			c.timeoutIntervalForRequest = TimeInterval(config.connectionTimeout.second())
 			
 			let task = URLSession(configuration: c, delegate: SessionDelegate({
@@ -323,7 +323,7 @@ extension LenContent {
 			}
 			
 			// not timeout: stopped
-			if let timeout {
+			if timeout != nil {
 				logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat:stopped", "stopped")
 				return
 			}

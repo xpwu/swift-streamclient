@@ -44,8 +44,9 @@ extension SyncAllRequest {
 	func Remove(reqId: UInt32) async -> (some SendChannel<(FakeHttp.Response, StmError?)>)? {
 		return await mutex.WithLock {
 			let ret = allRequests.removeValue(forKey: reqId)
-			// todo: check semaphore
-			if ret != nil {
+
+			let ava = await semaphore.AvailablePermits
+			if ret != nil && ava < semaphore.Permits{
 				await semaphore.Release()
 			}
 			
@@ -107,9 +108,9 @@ extension State: Equatable {
 			default:
 				return false
 			}
-		case .Invalidated(let stmError):
+		case .Invalidated(_):
 			switch rhs {
-			case .Invalidated(let stmError):
+			case .Invalidated(_):
 				return true
 			default:
 				return false
@@ -327,14 +328,12 @@ extension Net {
 			
 			async let _ = self.onPush(response.data)
 			// ignore error
-			let c = {[proto = self.proto, logger = self.logger
-								, flag = self.flag, connectID = self.connectID]()async->Void in
+			async let _ = {
 				let err = await proto.Send(content: pushAck)
 				if let err {
 					logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:pushAck", "error --- \(err)")
 				}
-			}
-			async let _ = c()
+			}()
 			return
 		}
 		
@@ -352,12 +351,10 @@ extension Net {
 	func onError(_ err: StmError) async {
 		let oldState = await closeAndOldState(err: err)
 		if oldState == .Connected {
-			let c = {[onPeerClosed = self.onPeerClosed, logger = self.logger
-								, flag = self.flag, connectID = self.connectID]()async->Void in
+			async let _ = {
 				logger.Debug("Net[\(flag)]<\(connectID)>.onError:onPeerClosed", "\(err)")
-				await onPeerClosed(err)
-			}
-			async let _ = c()
+				await self.onPeerClosed(err)
+			}()
 
 			await self.proto.Close()
 		}
