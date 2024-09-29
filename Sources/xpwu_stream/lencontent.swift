@@ -60,9 +60,12 @@ public class LenContent {
 	private var closedBySelf = ClosedBySelf()
 	private let heartbeatStop: Channel<Bool> = Channel(buffer: .Unlimited)
 	
-	public var logger: Logger = PrintLogger()
+	public var logger_: Logger = PrintLogger()
 	public var onMessage: ([Byte])async -> Void = { _ in}
 	public var onError: (StmError)async -> Void = { _ in}
+	
+	private let flag = UniqFlag()
+	private var connectID:String {get{self.handshake.ConnectId}}
 	
 	public convenience init(_ options: Option...) {
 		self.init(options)
@@ -144,22 +147,32 @@ func handshakeReq() -> Data {
 extension LenContent {
 	func read() {
 		Task {
+			logger.Debug("LenContent[\(flag)]<\(connectID)>.read:start", "run async loop...")
 			while task?.state == .running {
+				logger.Debug("LenContent[\(flag)]<\(connectID)>.read", "waiting for a message")
 				do {
 					var (data, eof) = try await task!.readData(ofMinLength: 1, maxLength: 4
 																	 , timeout:(2*self.handshake.HearBeatTime).timeInterval())
 					if data == nil  || eof {
+						logger.Debug("LenContent[\(flag)]<\(connectID)>.read:readLength"
+												 , "error --- data==nil || eof")
 						throw StmError.ElseConnErr("read length error, maybe connection closed by peer")
 					}
 					
-					let len: UInt32 = data!.toBytes().net2UInt32()
+					var len: UInt32 = data!.toBytes().net2UInt32()
 					// heartbeat
 					if len == 0 {
+						logger.Debug("LenContent[\(flag)]<\(connectID)>.read:Heartbeat"
+												 , "receive heartbeat from server")
 						continue
 					}
 					
+					len -= 4
 					// 出现这种情况，很可能是协议出现问题了，而不能单纯的认为是本次请求的问题
 					if len > self.handshake.MaxBytes {
+						logger.Debug("LenContent[\(flag)]<\(connectID)>.read:MaxBytes"
+												, "error: data(len: \(len) > maxbytes: \(handshake.MaxBytes) is Too Large")
+						
 						throw StmError.ElseConnErr("received Too Large data(len=\(len)), must be less than \(self.handshake.MaxBytes)")
 					}
 					
@@ -168,11 +181,14 @@ extension LenContent {
 						(data, eof) = try await task!.readData(ofMinLength: 1, maxLength: Int(len)
 																		 , timeout:self.handshake.FrameTimeout.timeInterval())
 						if data == nil  || eof {
+							logger.Debug("LenContent[\(flag)]<\(connectID)>.read:readContent"
+													 , "error --- data==nil || eof")
 							throw StmError.ElseConnErr("read content error, maybe connection closed by peer")
 						}
 						res.append(contentsOf: data!)
 					}
 					
+					logger.Debug("LenContent[\(flag)]<\(connectID)>.read", "read one message")
 					await onMessage(res)
 				} catch StmError.ElseConnErr(let msg) {
 					if !(await closedBySelf.isTrue) {
@@ -180,18 +196,32 @@ extension LenContent {
 					}
 					break
 				} catch {
+					logger.Debug("LenContent[\(flag)]<\(connectID)>.read:error", "\(error)")
 					if !(await closedBySelf.isTrue) {
 						await onError(StmError.ElseConnErr("\(error)"))
 					}
 					break
 				}
 			}
+			logger.Debug("LenContent[\(flag)]<\(connectID)>.read:end", "run loop is end")
 		}
 	}
 }
 
 extension LenContent: `Protocol` {
+	public var logger: Logger {
+		get {
+			logger_
+		}
+		set {
+			logger_ = newValue
+			logger_.Debug("LenContent[\(flag)].new", "flag=\(flag)")
+		}
+	}
+	
 	public func Connect() async -> (Handshake, StmError?) {
+		logger.Debug("LenContent[\(flag)].Connect:start", "\(self.config)")
+		
 		let (task, err) = await withCheckedContinuation {
 			(continuation: CheckedContinuation<(URLSessionStreamTask, StmError?), Never>) in
 			
@@ -207,36 +237,47 @@ extension LenContent: `Protocol` {
 		}
 		
 		if let err {
+			logger.Debug("LenContent[\(flag)].Connect:error", "\(err)")
 			return (Handshake(), err)
 		}
 		
 		do {
+			logger.Debug("LenContent[\(flag)].Connect:handshake", "write handshake ...")
 			try await task.write(handshakeReq(), timeout: TimeInterval(config.connectionTimeout.second()))
 			let (h, eof) = try await task.readData(ofMinLength: Handshake.StreamLen, maxLength: Handshake.StreamLen
 													, timeout: TimeInterval(config.connectionTimeout.second()))
 			if eof {
+				logger.Debug("LenContent[\(flag)].Connect:readHandshake", "connected eof")
 				throw StmError.ElseConnErr("connected eof")
 			}
 			
 			guard let h else {
+				logger.Debug("LenContent[\(flag)].Connect:readHandshake", "no handshake response")
 				throw StmError.ElseConnErr("no handshake response")
 			}
 			
 			self.handshake = Handshake.Parse(h.toBytes())
+			logger.Debug("LenContent[\(flag)]<\(connectID)>.readHandshake:handshake", "\(self.handshake)")
+			
 			self.setOutputHeartbeat()
 			self.read()
 			
 		}catch  {
+			logger.Debug("LenContent[\(flag)].Connect:handshake", "error --- \(error)")
 			task.cancel()
 			return (Handshake(), StmError.ElseConnErr("\(error)"))
 		}
 
 		self.task = task
+		
+		logger.Debug("LenContent[\(flag)]<\(connectID)>.Connect:end", "connectID = \(connectID)")
 		return (self.handshake, nil)
 	}
 	
 	public func Close() async {
 		task?.cancel()
+		await stopOutputHeartbeat()
+		logger.Debug("LenContent[\(flag)]<\(connectID)>.Close", "closed by self")
 	}
 	
 	public func Send(content: [Byte]) async -> StmError? {
@@ -252,11 +293,15 @@ extension LenContent: `Protocol` {
 		
 		let ret = await mutex.WithLock {()->StmError? in
 			do {
+				logger.Debug("LenContent[\(flag)]<\(connectID)>.Send:start", "frameBytes = \(content.count + 4)")
+				
 				try await task?.write(len.toData(), timeout: TimeInterval(self.handshake.FrameTimeout.second()))
 				try await task?.write(content.toData(), timeout: TimeInterval(self.handshake.FrameTimeout.second()))
 				
+				logger.Debug("LenContent[\(flag)]<\(connectID)>.Send:end", "end")
 				return nil
 			} catch {
+				logger.Debug("LenContent[\(flag)]<\(connectID)>.Send:error", "\(error)")
 				await onError(.ElseConnErr("\(error)"))
 				return .ElseConnErr("\(error)")
 			}
@@ -272,15 +317,18 @@ extension LenContent: `Protocol` {
 extension LenContent {
 	func setOutputHeartbeat() {
 		Task {
+			logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat:set", "set")
 			let timeout = await WithTimeout(self.handshake.HearBeatTime) {
 				await self.heartbeatStop.Receive()
 			}
 			
 			// not timeout: stopped
 			if let timeout {
+				logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat:stopped", "stopped")
 				return
 			}
 			
+			logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat:send", "send heartbeat to server")
 			let ok = await mutex.WithLock {
 				do {
 					try await self.task?.write(Data(repeating: 0, count: 4)
@@ -298,7 +346,13 @@ extension LenContent {
 		}
 	}
 	
+	/**
+	 * stop 后必须调用 set
+	 * heartbeat 后必须再次调用
+	 * 可以多发 heartbeat，但不能不发 heartbeat
+	 */
 	func stopOutputHeartbeat()async {
+		logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat", "will stop")
 		await self.heartbeatStop.Send(true)
 	}
 }

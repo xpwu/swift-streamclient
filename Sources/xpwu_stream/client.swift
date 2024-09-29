@@ -18,6 +18,7 @@ public class Client {
 	init(_ logger: Logger = PrintLogger(), _ protocolCreator: @escaping () -> Protocol) {
 		self.protocolCreator = protocolCreator
 		self.logger = logger
+		logger.Info("Client[\(flag)].new", "flag=\(flag)")
 	}
 }
 
@@ -26,9 +27,11 @@ private extension Client {
 		return Net(self.logger, protocolCreator: self.protocolCreator
 							 , onPeerClosed: {
 			[unowned self] error in
+			logger.Warning("Client[\(flag)].onPeerClosed", "reason: \(error)")
 			await self.onPeerClosed(error)
-		}, onPush: {[unowned self] error in
-			await self.onPush(error)
+		}, onPush: {[unowned self] data in
+			logger.Info("Client[\(flag)].onPush", "size: \(data.count)")
+			await self.onPush(data)
 		})
 	}
 	
@@ -47,29 +50,44 @@ public extension Client {
 
 	func Send(_ data: [Byte], withheaders headers:[String:String]
 						, timeout: Duration = 30*Duration.Second)async -> ([Byte], StmError?) {
+		let sflag = UniqFlag()
+		logger.Info("Client[\(flag)].Send[\(sflag)]:start", "\(headers), request size = \(data.count)")
 		
 		let net = await net()
 		let err = await net.connect()
 		if let err {
+			logger.Error("Client[\(flag)].Send[\(sflag)]:error", "connect error: \(err)")
 			return ([], err)
 		}
 		
 		let ret = await net.send(data: data, headers: headers, timeout: timeout)
 		if ret.1 == nil {
+			logger.Info("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):end", "response size = \(ret.0.count)")
 			return ret
 		}
 		if !ret.1!.isConnErr {
+			logger.Error("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):error", "request error = \(ret.1!)")
 			return ret
 		}
 		
 		// sending --- conn error:  retry
+		logger.Debug("Client[\(flag)].Send[\(sflag)]:retry", "retry-1")
+		
 		let net2 = await self.net()
 		let err2 = await net2.connect()
 		if let err2 {
+			logger.Error("Client[\(flag)].Send[\(sflag)]:error", "connect error: \(err2)")
 			return ([], err)
 		}
 		
-		return await net.send(data: data, headers: headers, timeout: timeout)
+		let ret2 = await net.send(data: data, headers: headers, timeout: timeout)
+		if ret2.1 == nil {
+			logger.Info("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):end", "response size = \(ret2.0.count)")
+		} else {
+			logger.Error("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):error", "request error = \(ret2.1!)")
+		}
+		
+		return ret2
 	}
 	
 }
@@ -84,6 +102,7 @@ public extension Client {
 	
 	func Close() async {
 		await mutex.WithLock {
+			logger.Info("Client[\(flag)].close", "closed by self")
 			await self.net_?.close()
 		}
 	}
