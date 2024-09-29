@@ -63,6 +63,15 @@ public class LenContent {
 	public var logger_: Logger = PrintLogger()
 	public var onMessage: (Data)async -> Void = { _ in}
 	public var onError: (StmError)async -> Void = { _ in}
+	public var logger: Logger {
+		get {
+			logger_
+		}
+		set {
+			logger_ = newValue
+			logger_.Debug("LenContent[\(flag)].new", "flag=\(flag)")
+		}
+	}
 	
 	private let flag = UniqFlag()
 	private var connectID:String {get{self.handshake.ConnectId}}
@@ -84,10 +93,19 @@ public class LenContent {
 
 public extension LenContent {
 	struct Option {
-		fileprivate struct Value {
+		fileprivate struct Value: CustomStringConvertible {
+			var description: String {
+				get {
+					let pre = tls ? "<tls>" : ""
+					return "\(pre)\(host):\(port)#connectTimeout=\(connectionTimeout.description)"
+				}
+			}
+			
 			var host: String = "127.0.0.1"
 			var port: Int = 8080
 			var connectionTimeout: Duration = 30*Duration.Second
+			
+			private var tls: Bool = false
 		}
 		fileprivate let runner: (inout Value)->Void
 		
@@ -110,21 +128,6 @@ public extension LenContent {
 				value.connectionTimeout = t
 			}
 		}
-	}
-}
-
-fileprivate class SessionDelegate: NSObject, URLSessionStreamDelegate {
-	func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-		if let error {
-			self.runner(task as! URLSessionStreamTask, .ElseConnErr("\(error)"))
-		} else {
-			self.runner(task as! URLSessionStreamTask, nil)
-		}
-	}
-	
-	fileprivate let runner:(URLSessionStreamTask, StmError?)->Void
-	init(_ r: @escaping (URLSessionStreamTask, StmError?)->Void) {
-		self.runner = r
 	}
 }
 
@@ -208,16 +211,27 @@ extension LenContent {
 	}
 }
 
-extension LenContent: `Protocol` {
-	public var logger: Logger {
-		get {
-			logger_
-		}
-		set {
-			logger_ = newValue
-			logger_.Debug("LenContent[\(flag)].new", "flag=\(flag)")
-		}
+// 没有在 delegate 中找到 stream 建立成功后的确定性回调，采用在 didCreateTask 后直接写 handshake
+fileprivate class SessionDelegate: NSObject, URLSessionStreamDelegate {
+//	func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+//		if let error {
+//			self.runner(task as! URLSessionStreamTask, .ElseConnErr("\(error)"))
+//		} else {
+//			self.runner(task as! URLSessionStreamTask, nil)
+//		}
+//	}
+	
+	func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+		self.runner(task as! URLSessionStreamTask, nil)
 	}
+	
+	fileprivate let runner:(URLSessionStreamTask, StmError?)->Void
+	init(_ r: @escaping (URLSessionStreamTask, StmError?)->Void) {
+		self.runner = r
+	}
+}
+
+extension LenContent: `Protocol` {
 	
 	public func Connect() async -> (Handshake, StmError?) {
 		logger.Debug("LenContent[\(flag)].Connect:start", "\(self.config)")

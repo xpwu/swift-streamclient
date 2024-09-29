@@ -52,10 +52,26 @@ final class clienttest: XCTestCase {
 		await client().Close()
 	}
 	
-	func sendErr() async throws {
+	func testRecoverErr()async throws {
 		let client = noConnClient()
-//		let ret = await client.Send("{}".data(using: .utf8), withheaders: ["api":"/mega"])
-		
+		let ret = await client.Recover()
+		XCTAssertEqual(true, ret?.isConnErr)
+	}
+	
+	func testRecover() async throws {
+		let client = client()
+		let ret = await client.Recover()
+		XCTAssertNil(ret)
+	}
+	
+	func testSendErr() async throws {
+		let client = noConnClient()
+		var ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+		XCTAssertEqual(true, ret.1?.isConnErr)
+		ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+		XCTAssertEqual(true, ret.1?.isConnErr)
+		ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+		XCTAssertEqual(true, ret.1?.isConnErr)
 	}
 
 }
