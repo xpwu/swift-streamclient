@@ -82,9 +82,9 @@ public extension Client {
 		
 		let ret2 = await net.send(data: data, headers: headers, timeout: timeout)
 		if ret2.1 == nil {
-			logger.Info("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):end", "response size = \(ret2.0.count)")
+			logger.Info("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID)):end", "response size = \(ret2.0.count)")
 		} else {
-			logger.Error("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):error", "request error = \(ret2.1!)")
+			logger.Error("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID)):error", "request error = \(ret2.1!)")
 		}
 		
 		return ret2
