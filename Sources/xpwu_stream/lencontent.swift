@@ -289,6 +289,7 @@ extension LenContent: `Protocol` {
 	}
 	
 	public func Close() async {
+		await closedBySelf.yes()
 		task?.cancel()
 		await stopOutputHeartbeat()
 		logger.Debug("LenContent[\(flag)]<\(connectID)>.Close", "closed by self")
