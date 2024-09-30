@@ -64,6 +64,36 @@ final class clienttest: XCTestCase {
 		XCTAssertNil(ret)
 	}
 	
+	func testAsyncRecover() async throws {
+		let client = client()
+		async let t1 = client.Recover()
+		async let t2 = client.Recover()
+		async let t3 = client.Recover()
+		async let t4 = client.Recover()
+		async let t5 = client.Recover()
+		async let t6 = client.Recover()
+		async let t7 = client.Recover()
+		async let t8 = client.Recover()
+		async let t9 = client.Recover()
+		let ret = await [t1, t2, t3, t4, t5, t6, t7, t8, t9]
+		XCTAssertNil(ret[8])
+	}
+	
+	func testAsyncRecoverErr() async throws {
+		let client = noConnClient()
+		async let t1 = client.Recover()
+		async let t2 = client.Recover()
+		async let t3 = client.Recover()
+		async let t4 = client.Recover()
+		async let t5 = client.Recover()
+		async let t6 = client.Recover()
+		async let t7 = client.Recover()
+		async let t8 = client.Recover()
+		async let t9 = client.Recover()
+		let ret = await [t1, t2, t3, t4, t5, t6, t7, t8, t9]
+		XCTAssertEqual(true, ret[8]?.isConnErr)
+	}
+	
 	func testSendErr() async throws {
 		let client = noConnClient()
 		var ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
@@ -72,6 +102,48 @@ final class clienttest: XCTestCase {
 		XCTAssertEqual(true, ret.1?.isConnErr)
 		ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
 		XCTAssertEqual(true, ret.1?.isConnErr)
+	}
+	
+	func testAsyncSendErr() async throws {
+		let client = noConnClient()
+		
+		async let t1: Void = {()async->Void in
+			let ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+			XCTAssertEqual(true, ret.1?.isConnErr)
+		}()
+		async let t2: Void = {()async->Void in
+			let ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+			XCTAssertEqual(true, ret.1?.isConnErr)
+		}()
+		async let t3: Void = {()async->Void in
+			let ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+			XCTAssertEqual(true, ret.1?.isConnErr)
+		}()
+		async let t4: Void = {()async->Void in
+			let ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+			XCTAssertEqual(true, ret.1?.isConnErr)
+		}()
+		async let t5: Void = {()async->Void in
+			let ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+			XCTAssertEqual(true, ret.1?.isConnErr)
+		}()
+		async let t6: Void = {()async->Void in
+			let ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+			XCTAssertEqual(true, ret.1?.isConnErr)
+		}()
+		async let t7: Void = {()async->Void in
+			let ret = await client.Send("{}".data(using: .utf8)!, withheaders: ["api":"/mega"])
+			XCTAssertEqual(true, ret.1?.isConnErr)
+		}()
+		
+		_ = await [t1, t2, t3, t4, t5, t6, t7]
+	}
+	
+	func testRecoverClose() async throws {
+		let client = client()
+		let ret = await client.Recover()
+		XCTAssertNil(ret)
+		await client.Close()
 	}
 
 }
