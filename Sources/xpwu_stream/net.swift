@@ -173,8 +173,8 @@ class Net {
 		
 		self.proto = protocolCreator()
 		self.proto.logger = l
-		self.proto.onError = {[unowned self](err)async->Void in await self.onError(err)}
-		self.proto.onMessage = {[unowned self](msg)async->Void in await self.onMessage(msg)}
+		self.proto.onError = {[weak self](err)async->Void in await self?.onError(err)}
+		self.proto.onMessage = {[weak self](msg)async->Void in await self?.onMessage(msg)}
 	}
 }
 
