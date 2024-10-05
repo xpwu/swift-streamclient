@@ -31,9 +31,9 @@ fileprivate class SyncAllRequest {
 // 要 send 就必须通过 remove 获取
 extension SyncAllRequest {
 	
-	func Add(reqId: UInt32) async -> some ReceiveChannel<(FakeHttp.Response, StmError?)> {
-		await semaphore.Acquire()
-		return await mutex.WithLock {
+	func Add(reqId: UInt32) async throws/*(CancellationError)*/ -> some ReceiveChannel<(FakeHttp.Response, StmError?)> {
+		try await semaphore.Acquire()
+		return try await mutex.withLock {
 			let ch = RequestChannel(buffer: 1)
 			allRequests[reqId] = ch
 			return ch
@@ -41,8 +41,8 @@ extension SyncAllRequest {
 	}
 	
 	// 可以用同一个 reqid 重复调用
-	func Remove(reqId: UInt32) async -> (some SendChannel<(FakeHttp.Response, StmError?)>)? {
-		return await mutex.WithLock {
+	func Remove(reqId: UInt32) async throws/*(CancellationError)*/ -> (some SendChannel<(FakeHttp.Response, StmError?)>)? {
+		return try await mutex.withLock {
 			let ret = allRequests.removeValue(forKey: reqId)
 
 			let ava = await semaphore.AvailablePermits
@@ -54,10 +54,10 @@ extension SyncAllRequest {
 		}
 	}
 	
-	func ClearAllWith(ret: (FakeHttp.Response, StmError?)) async {
-		await mutex.WithLock {
+	func ClearAllWith(ret: (FakeHttp.Response, StmError?)) async throws/*(CancellationError)*/ {
+		try await mutex.withLock {
 			for (_, ch) in allRequests {
-				await ch.Send(ret)
+				_ = try await ch.Send(ret)
 				await ch.Close()
 			}
 			allRequests.removeAll()
@@ -179,8 +179,8 @@ class Net {
 }
 
 private extension Net {
-	func closeAndOldState(err: StmError) async -> State {
-		let old = await connLocker.WithLock {
+	func closeAndOldState(err: StmError) async throws/*(CancellationError)*/ -> State {
+		let old = try await connLocker.withLock {
 			let old = self.state
 			
 			if self.state.isInvalidated {
@@ -192,7 +192,7 @@ private extension Net {
 			return old
 		}
 		
-		await allRequests.ClearAllWith(ret: (FakeHttp.Response(), err.toConnError))
+		try await allRequests.ClearAllWith(ret: (FakeHttp.Response(), err.toConnError))
 		
 		return old
 	}
@@ -200,8 +200,8 @@ private extension Net {
 
 extension Net {
 	// 可重复调用
-	func connect()async -> StmError? {
-		return await connLocker.WithLock {
+	func connect()async throws/*(CancellationError)*/ -> StmError? {
+		return try await connLocker.withLock {
 			if state == .Connected {
 				logger.Debug("Net[\(flag)].connect:Connected", "connID=\(connectID)")
 				return nil
@@ -213,7 +213,7 @@ extension Net {
 			
 			// state.NotConnect
 			logger.Debug("Net[\(flag)].connect:NotConnect", "will connect")
-			let(handshake, err) = await self.proto.Connect()
+			let(handshake, err) = try await self.proto.Connect()
 			if let e = err {
 				self.state = .Invalidated(e)
 				logger.Debug("Net[\(flag)].connect:error", "\(e)")
@@ -232,9 +232,9 @@ extension Net {
 	
 	// 如果没有连接成功，直接返回失败
 	func send(data: Data, headers:[String:String]
-						, timeout:Duration = 30*Duration.Second) async -> (Data, StmError?) {
+						, timeout:Duration = 30*Duration.Second) async throws/*(CancellationError)*/ -> (Data, StmError?) {
 		// 预判断
-		let ret = await connLocker.WithLock { ()->StmError? in
+		let ret = try await connLocker.withLock { ()->StmError? in
 			logger.Debug("Net[\(flag)]<\(connectID)>.send:state", "\(state) --- \(headers)")
 			if case State.Invalidated(let err) = state {
 				return err.toConnError
@@ -267,16 +267,16 @@ extension Net {
 		logger.Debug("Net[\(flag)]<\(connectID)>.send[\(reqId)]:request"
 								 , "\(headers) (reqId:\(reqId))")
 		
-		let ch = await allRequests.Add(reqId: reqId)
-		let ret2 = await WithTimeout(timeout) {
+		let ch = try await allRequests.Add(reqId: reqId)
+		let ret2 = try await withTimeoutOrNil(timeout) {
 			Task {
-				let err = await self.proto.Send(content:request.encodedData)
+				let err = try await self.proto.Send(content:request.encodedData)
 				if let err {
-					await self.allRequests.Remove(reqId: reqId)?.Send((FakeHttp.Response(), err))
+					_ = try await self.allRequests.Remove(reqId: reqId)?.Send((FakeHttp.Response(), err))
 				}
 			}
 			
-			if let r = await ch.Receive() {
+			if let r = try await ch.Receive() {
 				return r
 			}
 			return (FakeHttp.Response(), StmError.ElseErr("channel is closed, exception!!!"))
@@ -300,16 +300,16 @@ extension Net {
 			return (Data(),.ElseErr(String(decoding: ret2.0.data, as: UTF8.self)))
 		}
 		
-		_ = await allRequests.Remove(reqId: reqId)
+		_ = try await allRequests.Remove(reqId: reqId)
 		
 		return (ret2.0.data, nil)
 	}
 	
-	func close()async {
-		let oldState = await closeAndOldState(err: .ElseErr("closed by self"))
+	func close()async throws/*(CancellationError)*/ {
+		let oldState = try await closeAndOldState(err: .ElseErr("closed by self"))
 		if oldState == .Connected {
 			logger.Debug("Net[\(flag)]<\(connectID)>.close", "closed, become invalidated")
-			await self.proto.Close()
+			try await self.proto.Close()
 		}
 	}
 }
@@ -317,52 +317,61 @@ extension Net {
 // delegate
 extension Net {
 	func onMessage(_ msg: Data) async {
-		let (response, err) = msg.Parse()
-		if let err {
-			logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:parse", "error --- \(err)")
-			await onError(err)
-			return
-		}
-		
-		if response.isPush {
-			let (pushAck, err) = response.newPushAck()
+		do {
+			let (response, err) = msg.Parse()
 			if let err {
-				logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:newPushAck", "error --- \(err)")
+				logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:parse", "error --- \(err)")
 				await onError(err)
 				return
 			}
 			
-			async let _ = self.onPush(response.data)
-			// ignore error
-			async let _ = {
-				let err = await proto.Send(content: pushAck)
+			if response.isPush {
+				let (pushAck, err) = response.newPushAck()
 				if let err {
-					logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:pushAck", "error --- \(err)")
+					logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:newPushAck", "error --- \(err)")
+					await onError(err)
+					return
 				}
-			}()
-			return
+				
+				async let _ = self.onPush(response.data)
+				// ignore error
+				async let _ = {
+					let err = try await proto.Send(content: pushAck)
+					if let err {
+						logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:pushAck", "error --- \(err)")
+					}
+					logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:pushAck", "pushID = \(response.pushIDUInt32)")
+				}()
+				return
+			}
+			
+			let ch = try await allRequests.Remove(reqId: response.reqId)
+			guard let ch else {
+				logger.Warning("Net[\(flag)]<\(connectID)>.onMessage:NotFind"
+											 , "warning: not find request for reqId(\(response.reqId)")
+				return
+			}
+			
+			logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:response", "reqId=\(response.reqId)")
+			async let _ = ch.Send((response, nil))
+		}catch {
+			logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:catch", "\(error)")
 		}
-		
-		let ch = await allRequests.Remove(reqId: response.reqId)
-		guard let ch else {
-			logger.Warning("Net[\(flag)]<\(connectID)>.onMessage:NotFind"
-										 , "warning: not find request for reqId(\(response.reqId)")
-			return
-		}
-		
-		logger.Debug("Net[\(flag)]<\(connectID)>.onMessage:response", "reqId=\(response.reqId)")
-		async let _ = ch.Send((response, nil))
 	}
 	
 	func onError(_ err: StmError) async {
-		let oldState = await closeAndOldState(err: err)
-		if oldState == .Connected {
-			async let _ = {
-				logger.Debug("Net[\(flag)]<\(connectID)>.onError:onPeerClosed", "\(err)")
-				await self.onPeerClosed(err)
-			}()
-
-			await self.proto.Close()
+		do {
+			let oldState = try await closeAndOldState(err: err)
+			if oldState == .Connected {
+				async let _ = {
+					logger.Debug("Net[\(flag)]<\(connectID)>.onError:onPeerClosed", "\(err)")
+					await self.onPeerClosed(err)
+				}()
+				
+				async let _ =  self.proto.Close()
+			}
+		}catch {
+			logger.Debug("Net[\(flag)]<\(connectID)>.onError:catch", "\(error)")
 		}
 	}
 }

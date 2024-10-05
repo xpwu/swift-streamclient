@@ -64,6 +64,11 @@ struct FakeHttp{
 		var reqId: UInt32 = 0
 		var data: Data = Data()
 		var pushID: Data = Data()
+		var pushIDUInt32: UInt32 {
+			get {
+				return pushID.net2UInt32()
+			}
+		}
 		
 		var isPush: Bool {
 			reqId == 1

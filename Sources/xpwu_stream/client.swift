@@ -35,10 +35,10 @@ private extension Client {
 		})
 	}
 	
-	func net()async ->Net {
-		return await mutex.WithLock {
+	func net()async throws/*(CancellationError)*/ ->Net {
+		return try await mutex.withLock {
 			if self.net_ == nil || self.net_!.isInValid {
-				await self.net_?.close()
+				try await self.net_?.close()
 				self.net_ = newNet()
 			}
 			return self.net_!
@@ -53,41 +53,49 @@ public extension Client {
 		let sflag = UniqFlag()
 		logger.Info("Client[\(flag)].Send[\(sflag)]:start", "\(headers), request size = \(data.count)")
 		
-		let net = await net()
-		let err = await net.connect()
-		if let err {
-			logger.Error("Client[\(flag)].Send[\(sflag)]:error", "connect error: \(err)")
-			return (Data(), err)
+		do {
+			
+			let net = try await net()
+			
+			let err = try await net.connect()
+			if let err {
+				logger.Error("Client[\(flag)].Send[\(sflag)]:error", "connect error: \(err)")
+				return (Data(), err)
+			}
+			
+			let ret = try await net.send(data: data, headers: headers, timeout: timeout)
+			if ret.1 == nil {
+				logger.Info("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):end", "response size = \(ret.0.count)")
+				return ret
+			}
+			if !ret.1!.isConnErr {
+				logger.Error("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):error", "request error = \(ret.1!)")
+				return ret
+			}
+			
+			// sending --- conn error:  retry
+			logger.Debug("Client[\(flag)].Send[\(sflag)]:retry", "retry-1")
+			
+			let net2 = try await self.net()
+			
+			let err2 = try await net2.connect()
+			if let err2 {
+				logger.Error("Client[\(flag)].Send[\(sflag)]:error", "connect error: \(err2)")
+				return (Data(), err)
+			}
+			
+			let ret2 = try await net.send(data: data, headers: headers, timeout: timeout)
+			if ret2.1 == nil {
+				logger.Info("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID)):end", "response size = \(ret2.0.count)")
+			} else {
+				logger.Error("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID)):error", "request error = \(ret2.1!)")
+			}
+			
+			return ret2
+			
+		}catch {
+			return (Data(), .ElseErr("task canceled", cause: CancellationError()))
 		}
-		
-		let ret = await net.send(data: data, headers: headers, timeout: timeout)
-		if ret.1 == nil {
-			logger.Info("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):end", "response size = \(ret.0.count)")
-			return ret
-		}
-		if !ret.1!.isConnErr {
-			logger.Error("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID):error", "request error = \(ret.1!)")
-			return ret
-		}
-		
-		// sending --- conn error:  retry
-		logger.Debug("Client[\(flag)].Send[\(sflag)]:retry", "retry-1")
-		
-		let net2 = await self.net()
-		let err2 = await net2.connect()
-		if let err2 {
-			logger.Error("Client[\(flag)].Send[\(sflag)]:error", "connect error: \(err2)")
-			return (Data(), err)
-		}
-		
-		let ret2 = await net.send(data: data, headers: headers, timeout: timeout)
-		if ret2.1 == nil {
-			logger.Info("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID)):end", "response size = \(ret2.0.count)")
-		} else {
-			logger.Error("Client[\(flag)].Send[\(sflag)](connID=\(net.connectID)):error", "request error = \(ret2.1!)")
-		}
-		
-		return ret2
 	}
 	
 }
@@ -101,9 +109,13 @@ public extension Client {
 	 */
 	
 	func Close() async {
-		await mutex.WithLock {
-			logger.Info("Client[\(flag)].close", "closed by self")
-			await self.net_?.close()
+		do {
+			try await mutex.withLock {
+				logger.Info("Client[\(flag)].close", "closed by self")
+				try await self.net_?.close()
+			}
+		}catch {
+			logger.Warning("Client[\(flag)].close:catch", "\(error)")
 		}
 	}
 	
@@ -111,8 +123,13 @@ public extension Client {
 		self.protocolCreator = creator
 	}
 	
-	func Recover()async->StmError? {
-		return await net().connect()
+	func Recover()async ->StmError? {
+		do {
+			return try await net().connect()
+		}catch {
+			logger.Warning("Client[\(flag)].Recover:catch", "\(error)")
+			return .ElseErr("recover canceled by task", cause: CancellationError())
+		}
 	}
 }
 
