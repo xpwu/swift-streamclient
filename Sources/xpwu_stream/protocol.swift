@@ -50,9 +50,9 @@ public struct Handshake {
 
 public protocol `Protocol` {
 	
-	func Connect() async -> (Handshake, StmError?)
-	func Close() async
-	func Send(content: Data) async -> StmError?
+	func Connect() async throws/*(CancellationError)*/ -> (Handshake, StmError?)
+	func Close() async throws/*(CancellationError)*/
+	func Send(content: Data) async throws/*(CancellationError)*/ -> StmError?
 	
 	var logger: Logger {get set}
 	

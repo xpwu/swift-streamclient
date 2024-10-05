@@ -8,7 +8,7 @@
 import Foundation
 
 public enum StmError: Error {
-	case ConnTimeoutErr(String), ElseConnErr(String), ElseTimeoutErr(String), ElseErr(String)
+	case ConnTimeoutErr(String), ElseConnErr(String), ElseTimeoutErr(String), ElseErr(String, cause: Error? = nil)
 }
 
 extension StmError {
@@ -32,7 +32,12 @@ extension StmError {
 	
 	public var msg: String {
 		switch self {
-		case .ConnTimeoutErr(let msg), .ElseConnErr(let msg), .ElseTimeoutErr(let msg), .ElseErr(let msg):
+		case .ConnTimeoutErr(let msg), .ElseConnErr(let msg), .ElseTimeoutErr(let msg):
+			return msg
+		case let .ElseErr(msg, err):
+			if let err {
+				return "\(msg), caused by \(err)"
+			}
 			return msg
 		}
 	}

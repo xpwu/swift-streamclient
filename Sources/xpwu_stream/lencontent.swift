@@ -288,14 +288,13 @@ extension LenContent: `Protocol` {
 		return (self.handshake, nil)
 	}
 	
-	public func Close() async {
+	public func Close() async throws/*(CancellationError)*/ {
 		await closedBySelf.yes()
 		task?.cancel()
-		await stopOutputHeartbeat()
-		logger.Debug("LenContent[\(flag)]<\(connectID)>.Close", "closed by self")
+		try await stopOutputHeartbeat()
 	}
 	
-	public func Send(content: Data) async -> StmError? {
+	public func Send(content: Data) async throws/*(CancellationError)*/ -> StmError? {
 		// sizeof(length) = 4
 		if content.count + 4 > self.handshake.MaxBytes {
 			return StmError.ElseErr("request.size(\(content.count)) > MaxBytes(\(self.handshake.MaxBytes-4))")
@@ -304,9 +303,9 @@ extension LenContent: `Protocol` {
 		var len:Data = Data(repeating: 0, count: 4)
 		UInt32(content.count + 4).toNet(&len)
 		
-		await stopOutputHeartbeat()
+		try await stopOutputHeartbeat()
 		
-		let ret = await mutex.WithLock {()->StmError? in
+		let ret = try await mutex.withLock {()->StmError? in
 			do {
 				logger.Debug("LenContent[\(flag)]<\(connectID)>.Send:start", "frameBytes = \(content.count + 4)")
 				
@@ -333,18 +332,18 @@ extension LenContent {
 	func setOutputHeartbeat() {
 		Task {
 			logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat:set", "set")
-			let timeout = await WithTimeout(self.handshake.HearBeatTime) {
-				await self.heartbeatStop.Receive()
+			let timeout = try await withTimeoutOrNil(self.handshake.HearBeatTime) {
+				try await self.heartbeatStop.Receive() ?? false
 			}
 			
-			// not timeout: stopped
+			// not timeout: stopped or else error
 			if timeout != nil {
 				logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat:stopped", "stopped")
 				return
 			}
 			
 			logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat:send", "send heartbeat to server")
-			let ok = await mutex.WithLock {
+			let ok = try await mutex.withLock {
 				do {
 					try await self.task?.write(Data(repeating: 0, count: 4)
 																		 , timeout: self.handshake.FrameTimeout.timeInterval())
@@ -366,8 +365,8 @@ extension LenContent {
 	 * heartbeat 后必须再次调用
 	 * 可以多发 heartbeat，但不能不发 heartbeat
 	 */
-	func stopOutputHeartbeat()async {
+	func stopOutputHeartbeat()async throws/*(CancellationError)*/ {
 		logger.Debug("LenContent[\(flag)]<\(connectID)>.outputHeartbeat", "will stop")
-		await self.heartbeatStop.Send(true)
+		_ = try await self.heartbeatStop.Send(true)
 	}
 }
