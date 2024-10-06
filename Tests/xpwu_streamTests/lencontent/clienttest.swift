@@ -41,7 +41,7 @@ final class clienttest: XCTestCase {
 	}
 	
 	func noConnClient()-> Client {
-		return Client.WithLenContent(.Host("10.0.0.0"), .Port(0), logger:PrintLogger())
+		return Client.WithLenContent(.Host("10.0.0.0"), .Port(80), logger:PrintLogger())
 	}
 
 	func testNew() throws {
