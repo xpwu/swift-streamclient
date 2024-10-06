@@ -64,8 +64,8 @@ public protocol `Protocol` {
 extension Handshake: CustomStringConvertible {
 	public var description: String {
 		return """
-handshake info: {ConnectId: \(self.ConnectId), MaxConcurrent: \(self.MaxConcurrent) \
-, HearBeatTime: \(self.HearBeatTime), MaxBytes/frame: \(self.MaxBytes), FrameTimeout: \(self.FrameTimeout)}
+handshake info: {ConnectId: \(self.ConnectId), MaxConcurrent: \(self.MaxConcurrent)\
+, HearBeatTime: \(self.HearBeatTime.toString), MaxBytes/frame: \(self.MaxBytes), FrameTimeout: \(self.FrameTimeout.toString)}
 """
 	}
 }
