@@ -40,22 +40,11 @@ lencontent protocol:
 			 length: 4 bytes, net order; length=sizeof(content)+4; length=0 => heartbeat
 */
 
-private actor ClosedBySelf {
-	var bySelf: Bool = false
-	
-	var isTrue: Bool {
-		get {bySelf}
-	}
-	
-	func yes() {
-		bySelf = true
-	}
-}
-
 public class LenContent {
 	fileprivate var config: Option.Value = Option.Value()
 	private var handshake: Handshake = Handshake()
 	private var task: URLSessionStreamTask?
+	private var urlSession: URLSession?
 	private let mutex: Mutex = Mutex()
 	private var closedBySelf = ClosedBySelf()
 	private let heartbeatStop: Channel<Bool> = Channel(buffer: .Unlimited)
@@ -88,6 +77,7 @@ public class LenContent {
 	
 	deinit {
 		task?.cancel()
+		urlSession?.invalidateAndCancel()
 	}
 }
 
@@ -97,7 +87,7 @@ public extension LenContent {
 			var description: String {
 				get {
 					let pre = tls ? "<tls>" : ""
-					return "\(pre)\(host):\(port)#connectTimeout=\(connectionTimeout.description)"
+					return "\(pre)\(host):\(port)#connectTimeout=\(connectionTimeout.toString)"
 				}
 			}
 			
@@ -111,6 +101,7 @@ public extension LenContent {
 																											, URLCredential?) = {_,_,_ in
 				return (.performDefaultHandling, nil)}
 		}
+		
 		fileprivate let runner: (inout Value)->Void
 		
 		fileprivate init(_ runner: @escaping (inout Value) -> Void) {
@@ -233,17 +224,6 @@ extension LenContent {
 
 // 没有在 delegate 中找到 stream 建立成功后的确定性回调，采用在 didCreateTask 后直接写 handshake
 fileprivate class SessionDelegate: NSObject, URLSessionStreamDelegate {
-//	func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-//		if let error {
-//			self.runner(task as! URLSessionStreamTask, .ElseConnErr("\(error)"))
-//		} else {
-//			self.runner(task as! URLSessionStreamTask, nil)
-//		}
-//	}
-//	
-//	func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
-//		self.runner(task as! URLSessionStreamTask, nil)
-//	}
 	
 	func urlSession(_ session: URLSession, task: URLSessionTask
 									, didReceive challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition
@@ -252,18 +232,9 @@ fileprivate class SessionDelegate: NSObject, URLSessionStreamDelegate {
 		return await tls(session, task, challenge)
 	}
 	
-//	let runner:(URLSessionStreamTask, StmError?)->Void
 	let tls: (URLSession, URLSessionTask
 												, URLAuthenticationChallenge)async->(URLSession.AuthChallengeDisposition
 																															 , URLCredential?)
-	
-//	init(_ r: @escaping (URLSessionStreamTask, StmError?)->Void
-//			 , tls: @escaping (URLSession, URLSessionTask
-//												 , URLAuthenticationChallenge)async->(URLSession.AuthChallengeDisposition
-//																															, URLCredential?)) {
-//		self.runner = r
-//		self.tls = tls
-//	}
 	
 	init(tls: @escaping (URLSession, URLSessionTask
 												 , URLAuthenticationChallenge)async->(URLSession.AuthChallengeDisposition
@@ -277,37 +248,11 @@ extension LenContent: `Protocol` {
 	public func Connect() async -> (Handshake, StmError?) {
 		logger.Debug("LenContent[\(flag)].Connect:start", "\(self.config)")
 		
-//		let (task, err) = await withCheckedContinuation {
-//			(continuation: CheckedContinuation<(URLSessionStreamTask, StmError?), Never>) in
-//			
-//			let c = URLSessionConfiguration.default
-//			c.timeoutIntervalForRequest = TimeInterval(config.connectionTimeout.second())
-//			
-//			let delegate = SessionDelegate({(task, err) -> Void
-//				in continuation.resume(returning: (task, err))}
-//																		 , tls: config.tlsF)
-//			
-//			let task = URLSession(configuration: c, delegate: delegate, delegateQueue: nil)
-//				.streamTask(withHostName: config.host, port: config.port)
-//			
-//			task.resume()
-//			
-//			if config.tls {
-//				task.startSecureConnection()
-//			}
-//		}
-//		
-//		if let err {
-//			logger.Debug("LenContent[\(flag)].Connect:error", "\(err)")
-//			return (Handshake(), err)
-//		}
-		
 		let c = URLSessionConfiguration.default
 		c.timeoutIntervalForRequest = TimeInterval(config.connectionTimeout.second())
-		let delegate = SessionDelegate(tls: config.tlsF)
 		
-		let task = URLSession(configuration: c, delegate: delegate, delegateQueue: nil)
-			.streamTask(withHostName: config.host, port: config.port)
+		self.urlSession = URLSession(configuration: c, delegate: SessionDelegate(tls: config.tlsF), delegateQueue: nil)
+		let task = self.urlSession!.streamTask(withHostName: config.host, port: config.port)
 		
 		task.resume()
 		
@@ -339,6 +284,7 @@ extension LenContent: `Protocol` {
 		}catch  {
 			logger.Debug("LenContent[\(flag)].Connect:handshake", "error --- \(error)")
 			task.cancel()
+			urlSession!.invalidateAndCancel()
 			return (Handshake(), StmError.ElseConnErr("\(error)"))
 		}
 
@@ -351,6 +297,9 @@ extension LenContent: `Protocol` {
 	public func Close() async throws/*(CancellationError)*/ {
 		await closedBySelf.yes()
 		task?.cancel()
+		task = nil
+		urlSession?.invalidateAndCancel()
+		urlSession = nil
 		try await stopOutputHeartbeat()
 	}
 	
