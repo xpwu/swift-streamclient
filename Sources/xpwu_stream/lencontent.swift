@@ -105,7 +105,11 @@ public extension LenContent {
 			var port: Int = 8080
 			var connectionTimeout: Duration = 30*Duration.Second
 			
-			private var tls: Bool = false
+			var tls: Bool = false
+			var tlsF: (URLSession, URLSessionTask
+								 , URLAuthenticationChallenge)async->(URLSession.AuthChallengeDisposition
+																											, URLCredential?) = {_,_,_ in
+				return (.performDefaultHandling, nil)}
 		}
 		fileprivate let runner: (inout Value)->Void
 		
@@ -126,6 +130,22 @@ public extension LenContent {
 		public static func ConnectTimeout(_ t: Duration)-> Option {
 			return Option { value in
 				value.connectionTimeout = t
+			}
+		}
+		public static func TLS()-> Option {
+			return Option { value in
+				value.tls = true
+				value.tlsF = {_,_,_ in return (.performDefaultHandling, nil)}
+			}
+		}
+		
+		// https://developer.apple.com/documentation/foundation/urlsessiontaskdelegate/1411595-urlsession
+		public static func TLS(with tlsf: @escaping (URLSession, URLSessionTask
+														, URLAuthenticationChallenge)async->(URLSession.AuthChallengeDisposition
+																																 , URLCredential?))-> Option {
+			return Option { value in
+				value.tls = true
+				value.tlsF = tlsf
 			}
 		}
 	}
@@ -220,14 +240,35 @@ fileprivate class SessionDelegate: NSObject, URLSessionStreamDelegate {
 //			self.runner(task as! URLSessionStreamTask, nil)
 //		}
 //	}
+//	
+//	func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+//		self.runner(task as! URLSessionStreamTask, nil)
+//	}
 	
-	func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
-		self.runner(task as! URLSessionStreamTask, nil)
+	func urlSession(_ session: URLSession, task: URLSessionTask
+									, didReceive challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition
+																																								, URLCredential?) {
+		
+		return await tls(session, task, challenge)
 	}
 	
-	fileprivate let runner:(URLSessionStreamTask, StmError?)->Void
-	init(_ r: @escaping (URLSessionStreamTask, StmError?)->Void) {
-		self.runner = r
+//	let runner:(URLSessionStreamTask, StmError?)->Void
+	let tls: (URLSession, URLSessionTask
+												, URLAuthenticationChallenge)async->(URLSession.AuthChallengeDisposition
+																															 , URLCredential?)
+	
+//	init(_ r: @escaping (URLSessionStreamTask, StmError?)->Void
+//			 , tls: @escaping (URLSession, URLSessionTask
+//												 , URLAuthenticationChallenge)async->(URLSession.AuthChallengeDisposition
+//																															, URLCredential?)) {
+//		self.runner = r
+//		self.tls = tls
+//	}
+	
+	init(tls: @escaping (URLSession, URLSessionTask
+												 , URLAuthenticationChallenge)async->(URLSession.AuthChallengeDisposition
+																															, URLCredential?)) {
+		self.tls = tls
 	}
 }
 
@@ -236,23 +277,42 @@ extension LenContent: `Protocol` {
 	public func Connect() async -> (Handshake, StmError?) {
 		logger.Debug("LenContent[\(flag)].Connect:start", "\(self.config)")
 		
-		let (task, err) = await withCheckedContinuation {
-			(continuation: CheckedContinuation<(URLSessionStreamTask, StmError?), Never>) in
-			
-			let c = URLSessionConfiguration.default
-			c.timeoutIntervalForRequest = TimeInterval(config.connectionTimeout.second())
-			
-			let task = URLSession(configuration: c, delegate: SessionDelegate({
-				(task, err) -> Void in
-				continuation.resume(returning: (task, err))
-			}), delegateQueue: nil).streamTask(withHostName: config.host, port: config.port)
-			
-			task.resume()
-		}
+//		let (task, err) = await withCheckedContinuation {
+//			(continuation: CheckedContinuation<(URLSessionStreamTask, StmError?), Never>) in
+//			
+//			let c = URLSessionConfiguration.default
+//			c.timeoutIntervalForRequest = TimeInterval(config.connectionTimeout.second())
+//			
+//			let delegate = SessionDelegate({(task, err) -> Void
+//				in continuation.resume(returning: (task, err))}
+//																		 , tls: config.tlsF)
+//			
+//			let task = URLSession(configuration: c, delegate: delegate, delegateQueue: nil)
+//				.streamTask(withHostName: config.host, port: config.port)
+//			
+//			task.resume()
+//			
+//			if config.tls {
+//				task.startSecureConnection()
+//			}
+//		}
+//		
+//		if let err {
+//			logger.Debug("LenContent[\(flag)].Connect:error", "\(err)")
+//			return (Handshake(), err)
+//		}
 		
-		if let err {
-			logger.Debug("LenContent[\(flag)].Connect:error", "\(err)")
-			return (Handshake(), err)
+		let c = URLSessionConfiguration.default
+		c.timeoutIntervalForRequest = TimeInterval(config.connectionTimeout.second())
+		let delegate = SessionDelegate(tls: config.tlsF)
+		
+		let task = URLSession(configuration: c, delegate: delegate, delegateQueue: nil)
+			.streamTask(withHostName: config.host, port: config.port)
+		
+		task.resume()
+		
+		if config.tls {
+			task.startSecureConnection()
 		}
 		
 		do {
