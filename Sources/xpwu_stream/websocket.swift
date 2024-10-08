@@ -66,9 +66,15 @@ public extension WebSocket {
 			self.runner = runner
 		}
 		
+		// url prefix with: `ws://` or `wss://`
 		public static func Url(_ url: String)-> Option {
 			return Option { value in
-				value.url = url
+				let ws = try! NSRegularExpression(pattern: "^wss?://")
+				if ws.matches(url).count == 0 {
+					value.url = "ws://" + url
+				} else {
+					value.url = url
+				}
 			}
 		}
 		public static func ConnectTimeout(_ t: Duration)-> Option {
