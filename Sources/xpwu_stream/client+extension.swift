@@ -10,7 +10,7 @@ import xpwu_x
 
 // LenContent
 public extension Client {
-	static func WithLenContent(_ options: LenContent.Option..., logger: Logger = PrintLogger())->Client {
+	static func withLenContent(_ options: LenContent.Option..., logger: Logger = PrintLogger())->Client {
 		return Client(logger) {
 			return LenContent(options)
 		}

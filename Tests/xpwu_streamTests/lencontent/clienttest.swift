@@ -37,11 +37,11 @@ final class clienttest: XCTestCase {
 	let properties = LocalProperties()
 	
 	func client()-> Client {
-		return Client.WithLenContent(.Host(properties.Host()), .Port(properties.Port()), logger:PrintLogger())
+		return Client.withLenContent(.Host(properties.Host()), .Port(properties.Port()), logger:PrintLogger())
 	}
 	
 	func noConnClient()-> Client {
-		return Client.WithLenContent(.Host("10.0.0.0"), .Port(80), logger:PrintLogger())
+		return Client.withLenContent(.Host("10.0.0.0"), .Port(80), logger:PrintLogger())
 	}
 
 	func testNew() throws {

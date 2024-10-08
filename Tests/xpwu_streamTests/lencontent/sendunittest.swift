@@ -50,7 +50,7 @@ final class sendunittest: XCTestCase {
 	let properties = LocalProperties()
 	
 	func client()-> Client {
-		return Client.WithLenContent(.Host(properties.Host()), .Port(properties.Port()), logger:PrintLogger())
+		return Client.withLenContent(.Host(properties.Host()), .Port(properties.Port()), logger:PrintLogger())
 	}
 	
 	func testSendOne() async throws {
