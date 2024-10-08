@@ -171,48 +171,73 @@ extension WebSocket: `Protocol` {
 		self.urlSession = URLSession(configuration: c, delegate: delegate, delegateQueue: nil)
 		self.task = self.urlSession!.webSocketTask(with: url)
 		
-		do {
-			let ret = try await withSuspend {[weak task = self.task](suspend:Suspend<StmError?>) in
-				delegate.onOpen = {
-					suspend.resume(returning: $0)
+		let conCh = Channel<StmError?>(buffer: 1)
+		let connTask = Task {
+			do {
+				let ret = try await withSuspend {[weak task = self.task](suspend:Suspend<StmError?>) in
+					delegate.onOpen = {
+						suspend.resume(returning: $0)
+					}
+					
+					task?.resume()
 				}
 				
-				task?.resume()
-			}
-			
-			if let ret {
-				throw ret
-			}
-			
-			let msg = try await self.task?.receive()
-	
-			switch msg {
-			case .data(let handshake):
-				if handshake.count != Handshake.StreamLen {
-					throw StmError.ElseConnErr("handshake size error")
+				if let ret {
+					throw ret
 				}
-				self.handshake = Handshake.Parse(handshake)
-				task!.maximumMessageSize = Int(self.handshake.MaxBytes)
 				
-			default:
-				throw StmError.ElseConnErr("handshake type error")
+				let msg = try await self.task?.receive()
+		
+				switch msg {
+				case .data(let handshake):
+					if handshake.count != Handshake.StreamLen {
+						throw StmError.ElseConnErr("handshake size error")
+					}
+					self.handshake = Handshake.Parse(handshake)
+					task!.maximumMessageSize = Int(self.handshake.MaxBytes)
+					
+				default:
+					throw StmError.ElseConnErr("handshake type error")
+				}
+				
+				self.read()
+				_ = try await conCh.Send(nil)
+				
+			}catch {
+				logger.Debug("WebSocket[\(flag)].Connect:error", "\(error)")
+				if let err = error as? StmError {
+					_ = try? await conCh.Send(err)
+				}
+				
+				_ = try? await conCh.Send(StmError.ElseConnErr("\(error)"))
 			}
-			
-			self.read()
-			
-		}catch {
-			logger.Debug("WebSocket[\(flag)].Connect:handshake", "error --- \(error)")
-			self.task?.cancel()
-			self.urlSession?.invalidateAndCancel()
-			if let err = error as? StmError {
-				return (Handshake(), err)
-			}
-			
-			return (Handshake(), StmError.ElseConnErr("\(error)"))
 		}
 		
-		logger.Debug("WebSocket[\(flag)]<\(connectID)>.Connect:end", "connectID = \(connectID)")
-		return (self.handshake, nil)
+		let timeout = try? await withTimeout(config.connectionTimeout) {
+			try await conCh.Receive()!
+		}
+		
+		var retErr: StmError = .ElseConnErr("unknown")
+		switch timeout {
+		case .success(let err):
+			guard let err else {
+				logger.Debug("WebSocket[\(flag)]<\(connectID)>.Connect:end", "connectID = \(connectID)")
+				return (self.handshake, nil)
+			}
+			retErr = err
+		case .failure(_):
+			logger.Debug("WebSocket[\(flag)].Connect:error", "timeout")
+			retErr = .ConnTimeoutErr("timeout")
+		case nil:
+			logger.Debug("WebSocket[\(flag)].Connect:error", "canceled by task")
+			retErr = .ElseConnErr("canceled by task")
+		}
+		
+		connTask.cancel()
+		self.task?.cancel()
+		self.urlSession?.invalidateAndCancel()
+		
+		return (Handshake(), retErr)
 	}
 	
 	public func Close() async throws/*(CancellationError)*/ {
