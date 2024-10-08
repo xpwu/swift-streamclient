@@ -21,8 +21,14 @@ let package = Package(
             name: "xpwu_stream",
 						dependencies: [.product(name: "xpwu_x", package: "xpwu_x"),
 													 .product(name: "xpwu_concurrency", package: "xpwu_concurrency")]),
-        .testTarget(
-            name: "xpwu_streamTests",
-            dependencies: ["xpwu_stream"]),
+//        .testTarget(
+//            name: "xpwu_streamTests",
+//            dependencies: ["xpwu_stream", "local_properties"]),
+				.testTarget(
+						name: "lencontentTests",
+						dependencies: ["xpwu_stream"]),
+				.testTarget(
+						name: "websocketTests",
+						dependencies: ["xpwu_stream"])
     ]
 )

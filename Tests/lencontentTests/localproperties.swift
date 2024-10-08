@@ -18,11 +18,11 @@ private let urlKey = "websocket.url"
  file:  ./local.properties
  
  ```
- lencontent.host = xxx.xxx.xxx.xx
+ lencontent.host = 127.0.0.1
  
- lencontent.port = xxxx
+ lencontent.port = 8080
  
- websocket.url = ws://xxxxxx
+ websocket.url = ws://127.0.0.1:8001
  
  ```
  */
