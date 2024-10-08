@@ -23,6 +23,21 @@ public extension Client {
 	}
 }
 
+// Websocket
+public extension Client {
+	static func withWebSocket(_ options: WebSocket.Option..., logger: Logger = PrintLogger())->Client {
+		return Client(logger) {
+			return WebSocket(options)
+		}
+	}
+	
+	func UpdateOptions(_ options: WebSocket.Option...) {
+		self.UpdateProtocol {
+			return WebSocket(options)
+		}
+	}
+}
+
 public extension Client {
 	
 	private static let reqidKey: String = "X-Req-Id"
