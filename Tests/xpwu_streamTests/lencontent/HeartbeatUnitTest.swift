@@ -56,7 +56,7 @@ final class HeartbeatUnitTest: XCTestCase {
 	let properties = LocalProperties()
 	
 	func client(_ logger: Logger)-> Client {
-		return Client.WithLenContent(.Host(properties.Host()), .Port(properties.Port()), logger: logger)
+		return Client.withLenContent(.Host(properties.Host()), .Port(properties.Port()), logger: logger)
 	}
 	
 	func testHBtime() async throws {
