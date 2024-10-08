@@ -25,7 +25,7 @@ public class WebSocket {
 		}
 		set {
 			logger_ = newValue
-			logger_.Debug("LenContent[\(flag)].new", "flag=\(flag)")
+			logger_.Debug("WebSocket[\(flag)].new", "flag=\(flag)")
 		}
 	}
 	
