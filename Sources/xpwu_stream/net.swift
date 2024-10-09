@@ -255,10 +255,10 @@ extension Net {
 									 , "\(headers) (reqId:\(reqId)) --- error: \(err)")
 			return (Data(), err)
 		}
-		if request.encodedData.count > self.handshake.MaxBytes {
+		if request.loadLen > self.handshake.MaxBytes {
 			logger.Debug("Net[\(flag)]<\(connectID)>.send:MaxBytes"
-									 , "\(headers) (reqId:\(reqId)) --- error: Too Large")
-			return (Data(), .ElseErr("request.size(\(request.encodedData.count)) > MaxBytes(\(handshake.MaxBytes))"))
+									 , "\(headers) (reqId:\(reqId)) --- error: data is Too Large")
+			return (Data(), .ElseErr("request.size(\(request.loadLen)) > MaxBytes(\(handshake.MaxBytes))"))
 		}
 		
 		// 在客户端超时也认为是一个请求结束，但是真正的请求并没有结束，所以在服务器看来，仍然占用服务器的一个并发数
