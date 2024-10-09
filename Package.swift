@@ -12,18 +12,15 @@ let package = Package(
             name: "xpwu_stream",
             targets: ["xpwu_stream"]),
     ],
-		dependencies: [.package(name:"xpwu_x", path: "../swift-x"),
-									 .package(name:"xpwu_concurrency", path: "../swift-concurrency"),],
+		dependencies: [.package(url: "https://github.com/xpwu/swift-x", .upToNextMajor(from: "1.0.0")),
+									 .package(url: "https://github.com/xpwu/swift-concurrency", .upToNextMajor(from: "1.0.0")),],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "xpwu_stream",
-						dependencies: [.product(name: "xpwu_x", package: "xpwu_x"),
-													 .product(name: "xpwu_concurrency", package: "xpwu_concurrency")]),
-//        .testTarget(
-//            name: "xpwu_streamTests",
-//            dependencies: ["xpwu_stream", "local_properties"]),
+						dependencies: [.product(name: "xpwu_x", package: "swift-x"),
+													 .product(name: "xpwu_concurrency", package: "swift-concurrency")]),
 				.testTarget(
 						name: "lencontentTests",
 						dependencies: ["xpwu_stream"]),
