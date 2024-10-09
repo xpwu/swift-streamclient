@@ -183,7 +183,7 @@ extension LenContent {
 					
 					len -= 4
 					// 出现这种情况，很可能是协议出现问题了，而不能单纯的认为是本次请求的问题
-					if len > self.handshake.MaxBytes {
+					if len > self.handshake.MaxBytes + UInt32(FakeHttp.Response.MaxNoLoadLen) {
 						logger.Debug("LenContent[\(flag)]<\(connectID)>.read:MaxBytes"
 												, "error: data(len: \(len) > maxbytes: \(handshake.MaxBytes) is Too Large")
 						
@@ -304,10 +304,6 @@ extension LenContent: `Protocol` {
 	}
 	
 	public func Send(content: Data) async throws/*(CancellationError)*/ -> StmError? {
-		// sizeof(length) = 4
-		if content.count + 4 > self.handshake.MaxBytes {
-			return StmError.ElseErr("request.size(\(content.count)) > MaxBytes(\(self.handshake.MaxBytes-4))")
-		}
 		
 		var len:Data = Data(repeating: 0, count: 4)
 		UInt32(content.count + 4).toNet(&len)

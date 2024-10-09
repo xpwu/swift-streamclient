@@ -194,7 +194,7 @@ extension WebSocket: `Protocol` {
 						throw StmError.ElseConnErr("handshake size error")
 					}
 					self.handshake = Handshake.Parse(handshake)
-					task!.maximumMessageSize = Int(self.handshake.MaxBytes)
+					task!.maximumMessageSize = Int(self.handshake.MaxBytes) + FakeHttp.Response.MaxNoLoadLen
 					
 				default:
 					throw StmError.ElseConnErr("handshake type error")
@@ -247,9 +247,6 @@ extension WebSocket: `Protocol` {
 	}
 	
 	public func Send(content: Data) async throws/*(CancellationError)*/ -> StmError? {
-		if content.count > self.handshake.MaxBytes {
-			return StmError.ElseErr("request.size(\(content.count)) > MaxBytes(\(self.handshake.MaxBytes))")
-		}
 		
 		do {
 			logger.Debug("WebSocket[\(flag)]<\(connectID)>.Send:start", "frameBytes = \(content.count)")

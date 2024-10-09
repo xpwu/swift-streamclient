@@ -45,6 +45,7 @@ struct FakeHttp{
   struct Request {
 		fileprivate var data:Data = Data()
 		var encodedData: Data { get {data} }
+		var loadLen: Int { get {encodedData.count - 4}}
 		
 		mutating func setReqId(reqId:UInt32) {
       data[0] = Byte((reqId & 0xff000000) >> 24)
@@ -73,6 +74,9 @@ struct FakeHttp{
 		var isPush: Bool {
 			reqId == 1
 		}
+		
+		// reqid + status + pushid
+		static let MaxNoLoadLen = 4 + 1 + 4
   }
 	
 	static let OK = Response.Status.OK

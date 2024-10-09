@@ -42,7 +42,7 @@ public struct Handshake {
 	public var HearBeatTime: Duration = Duration.INFINITE
 	public var FrameTimeout: Duration = Duration.INFINITE // 同一帧里面的数据超时
 	public var MaxConcurrent: Int = Int.max // 一个连接上的最大并发
-	public var MaxBytes: UInt64 = 10 * 1024 * 1024 // 一帧数据的最大字节数
+	public var MaxBytes: UInt32 = 10 * 1024 * 1024 // 一帧数据的最大字节数
 	public var ConnectId: String = "---no_connectId---"
 	
 	public init(){}
@@ -91,7 +91,7 @@ extension Handshake {
 		ret.HearBeatTime = handshake[0..<2].net2UInt64() * Duration.Second
 		ret.FrameTimeout = UInt64(handshake[2]) * Duration.Second
 		ret.MaxConcurrent = Int(handshake[3])
-		ret.MaxBytes = handshake[4..<8].net2UInt64()
+		ret.MaxBytes = handshake[4..<8].net2UInt32()
 		ret.ConnectId = String(format: "%016llx", handshake[8...].net2UInt64())
 		
 		return ret
