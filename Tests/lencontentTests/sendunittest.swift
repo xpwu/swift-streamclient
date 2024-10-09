@@ -8,7 +8,7 @@
 import XCTest
 import xpwu_x
 import xpwu_concurrency
-@testable import xpwu_stream
+import xpwu_stream
 
 struct ReturnReq: Codable {
 	var data: String = ""
