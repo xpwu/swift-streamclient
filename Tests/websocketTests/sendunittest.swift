@@ -62,6 +62,13 @@ final class sendunittest: XCTestCase {
 		XCTAssertEqual(res.ret, req.data)
 	}
 	
+	func testSendMega() async throws {
+		let c = client()
+		let (_, err) = await c.SendWithReqId("{}".data(using: .utf8)!, withheaders: ["api" : "mega"])
+		XCTAssertNotNil(err)
+		XCTAssertEqual("response is too large", err?.msg)
+	}
+	
 	func testSendMore() async throws {
 		let c = client()
 		let cases = [
