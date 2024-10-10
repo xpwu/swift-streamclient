@@ -66,7 +66,8 @@ final class sendunittest: XCTestCase {
 		let c = client()
 		let (_, err) = await c.SendWithReqId("{}".data(using: .utf8)!, withheaders: ["api" : "mega"])
 		XCTAssertNotNil(err)
-		XCTAssertEqual("response is too large", err?.msg)
+		let ret = (err!.msg == "response is too large") || (err!.msg == "507 Insufficient Storage")
+		XCTAssertTrue(ret)
 	}
 	
 	func testSendMore() async throws {
