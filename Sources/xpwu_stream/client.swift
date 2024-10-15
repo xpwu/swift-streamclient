@@ -50,7 +50,7 @@ public extension Client {
 
 	func Send(_ data: Data, withheaders headers:[String:String]
 						, timeout: Duration = 30*Duration.Second)async -> (Data, StmError?) {
-		let sflag = UniqFlag()
+		let sflag = headers[Client.reqidKey] ?? UniqFlag()
 		logger.Info("Client[\(flag)].Send[\(sflag)]:start", "\(headers), request size = \(data.count)")
 		
 		do {
