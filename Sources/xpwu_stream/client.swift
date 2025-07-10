@@ -5,17 +5,18 @@ import Foundation
 import xpwu_x
 import xpwu_concurrency
 
-public class Client {
-	public var onPush: (Data)async->Void = {_ in }
-	public var onPeerClosed: (StmError)async->Void = {_ in }
+public final class Client: @unchecked Sendable {
+	public var onPush: @Sendable(Data)async->Void = {_ in }
+	public var onPeerClosed: @Sendable(StmError)async->Void = {_ in }
 	
 	let logger: Logger
-	var protocolCreator: ()->`Protocol`
 	let flag = UniqFlag()
+	
 	private let mutex: Mutex = Mutex()
 	private var net_: Net?
+	var protocolCreator: @Sendable()->`Protocol`
 	
-	init(_ logger: Logger = PrintLogger(), _ protocolCreator: @escaping () -> Protocol) {
+	init(_ logger: Logger = PrintLogger(), _ protocolCreator: @Sendable @escaping () -> Protocol) {
 		self.protocolCreator = protocolCreator
 		self.logger = logger
 		logger.Info("Client[\(flag)].new", "flag=\(flag)")
@@ -119,8 +120,12 @@ public extension Client {
 		}
 	}
 	
-	func UpdateProtocol(creator: @escaping()->`Protocol`) {
-		self.protocolCreator = creator
+	func UpdateProtocol(creator: @Sendable @escaping()->`Protocol`) {
+		Task {
+			try await mutex.withLock {
+				self.protocolCreator = creator
+			}
+		}
 	}
 	
 	func Recover()async ->StmError? {
