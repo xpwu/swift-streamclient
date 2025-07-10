@@ -18,15 +18,16 @@ let client = Client.withWebSocket(.Url("xxxx")
 let client = Client(){// protocol}
 ```
 2、client.Send(xxx) 即可像短连接一样发送请求，同一个client上的所有
-请求都是在一条连接中发送。
+请求都是在一条连接中发送。Send 方法是**并发安全**的
 
 ## 2、push / peerClosed
 set client.onPush 即可设定推送的接收函数   
 set client.onPeerClosed 即可设定网络被关闭时的接收函数，但主动
-调用 client.close() 方法不会触发 onPeerClosed 事件
+调用 client.close() 方法不会触发 onPeerClosed 事件    
+__注__： push / peerClosed 的设置方法**不是**并发安全的，使用时应该在 Client 创建后就设置这两个参数
 
 ## 3、recover connection
-如果不需要发送数据而仅需恢复网络，可以使用 client.Recover
+如果不需要发送数据而仅需恢复网络，可以使用 client.Recover, 是并发安全的
 
 ## 4、Update protocol/options
 client.UpdateProtocol 更新配置，下一次自动重连时，会使用新的配置
