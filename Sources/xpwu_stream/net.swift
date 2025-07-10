@@ -10,17 +10,14 @@ import xpwu_concurrency
 import xpwu_x
 
 
-fileprivate class SyncAllRequest {
+fileprivate final class SyncAllRequest: @unchecked Sendable {
 	fileprivate typealias RequestChannel = Channel<(FakeHttp.Response, StmError?)>
 	
+	let semaphore: xpwu_concurrency.Semaphore
+	
+	// mutex 确保 allRequests 安全
 	let mutex: Mutex = Mutex()
 	private var allRequests: [UInt32:RequestChannel] = [:]
-	var semaphore: xpwu_concurrency.Semaphore = Semaphore(permits: 3)
-	
-	public var permits: Int {
-		get {semaphore.Permits}
-		set {semaphore = Semaphore(permits: newValue)}
-	}
 	
 	init(permits: Int = 3) {
 		semaphore = Semaphore(permits: permits)
@@ -42,27 +39,32 @@ extension SyncAllRequest {
 	
 	// 可以用同一个 reqid 重复调用
 	func Remove(reqId: UInt32) async throws/*(CancellationError)*/ -> (some SendChannel<(FakeHttp.Response, StmError?)>)? {
-		return try await mutex.withLock {
-			let ret = allRequests.removeValue(forKey: reqId)
-
-			let ava = await semaphore.AvailablePermits
-			if ret != nil && ava < semaphore.Permits{
-				await semaphore.Release()
-			}
-			
-			return ret
+		
+		var ret: RequestChannel? = nil
+		try await mutex.withLock {
+			ret = allRequests.removeValue(forKey: reqId)
 		}
+		
+		// 真实的删除了一个 reqid
+		if ret != nil {
+			await semaphore.Release()
+		}
+		
+		return ret
 	}
 	
 	func ClearAllWith(ret: (FakeHttp.Response, StmError?)) async throws/*(CancellationError)*/ {
+		var cnt = 0
 		try await mutex.withLock {
+			cnt = allRequests.count
 			for (_, ch) in allRequests {
 				_ = try await ch.Send(ret)
 				await ch.Close()
 			}
 			allRequests.removeAll()
-			await semaphore.ReleaseAll()
 		}
+		
+		await semaphore.Release(cnt)
 	}
 }
 
@@ -139,32 +141,36 @@ actor ReqId {
 	}
 }
 
-class Net {
+final class Net: @unchecked Sendable {
 	private let logger: Logger
-	private let onPeerClosed: (StmError) async -> Void
-	private let onPush: (Data) async -> Void
+	private let onPeerClosed: @Sendable (StmError) async -> Void
+	private let onPush: @Sendable (Data) async -> Void
 	
 	var isInValid: Bool {
 		get { state.isInvalidated }
 	}
-
-	private var handshake: Handshake = Handshake()
-
+	
 	private let connLocker: Mutex = Mutex()
 	private var state: State = State.NotConnect
-	private var proto: `Protocol`
-
-	private var reqId: ReqId = ReqId()
+	// 只在连接成功后才会赋值一次，而 connect 往往是第一个调用的方法，正常都是赋值后才会使用，所有真正使用的地方没有加锁
+	// 在其它使用的地方，有 connLocker 互斥
+	private var handshake: Handshake = Handshake()
 	private var allRequests: SyncAllRequest = SyncAllRequest()
+
+	// 只会在 init 中修改，所以是满足 Sendable 的
+	// todo: 定义为只在初始化时才会修改的 let ？
+	private var proto: `Protocol`
+	
+	private let reqId: ReqId = ReqId()
 
 	private let flag = UniqFlag()
 	
 	var connectID: String {
-		get {handshake.ConnectId}
+		get {self.handshake.ConnectId}
 	}
 
 	init(_ l: Logger, protocolCreator:()->`Protocol`
-			 , onPeerClosed: @escaping(StmError)async->Void, onPush: @escaping(Data)async->Void) {
+			 , onPeerClosed: @Sendable @escaping(StmError)async->Void, onPush: @Sendable @escaping(Data)async->Void) {
 		self.logger = l
 		self.onPush = onPush
 		self.onPeerClosed = onPeerClosed
@@ -199,7 +205,7 @@ private extension Net {
 }
 
 extension Net {
-	// 可重复调用
+	// 可重复调用，并发安全
 	func connect()async throws/*(CancellationError)*/ -> StmError? {
 		return try await connLocker.withLock {
 			if state == .Connected {
@@ -223,7 +229,8 @@ extension Net {
 			// OK
 			self.state = .Connected
 			self.handshake = handshake
-			self.allRequests.permits = self.handshake.MaxConcurrent
+			self.allRequests = SyncAllRequest(permits: handshake.MaxConcurrent)
+
 			logger.Debug("Net[\(flag)]<\(connectID)>.connect:handshake", "\(handshake)")
 			
 			return nil
