@@ -10,7 +10,7 @@ import xpwu_x
 import xpwu_concurrency
 @testable import xpwu_stream
 
-class HBLogger {
+final class HBLogger: @unchecked Sendable {
 	
 	let hbTimeRegex = try! NSRegularExpression(pattern: "^Net\\[.*]<.*>.connect:handshake$")
 	let hbTimeResult = try! NSRegularExpression(pattern: "^handshake info: \\{ConnectId: .*, MaxConcurrent: .*, HearBeatTime: (.*), MaxBytes/frame: .*, FrameTimeout: .*\\}$")
