@@ -61,14 +61,14 @@ extension LocalProperties {
 	
 	func Port() ->Int  {
 		if properties[portKey] == nil {
-			fatalError("not exist key: `lencontent.host` in \(file)")
+			fatalError("not exist key: `lencontent.port` in \(file)")
 		}
 		return Int(properties[portKey]!, radix: 10)!
 	}
 	
 	func url() ->String  {
 		if properties[urlKey] == nil {
-			fatalError("not exist key: `lencontent.host` in \(file)")
+			fatalError("not exist key: `websocket.url` in \(file)")
 		}
 		return properties[urlKey]!
 	}
